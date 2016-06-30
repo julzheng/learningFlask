@@ -1,4 +1,5 @@
-import datetime, re
+import datetime
+import re
 
 from app import db
 
@@ -9,13 +10,16 @@ def slugify(s):
 
 entry_tags = db.Table('entry_tags',
                       db.Column('tag_id', db.Integer, db.ForeignKey('tag.id')),
-                      db.Column('entry_id', db.Integer, db.ForeignKey('entry.id'))
+                      db.Column('entry_id', db.Integer,
+                                db.ForeignKey('entry.id'))
                       )
+
 
 class Entry(db.Model):
     STATUS_PUBLIC = 0
     STATUS_DRAFT = 1
-    
+    STATUS_DELETED = 2
+
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100))
     slug = db.Column(db.String(100), unique=True)
@@ -28,8 +32,8 @@ class Entry(db.Model):
         onupdate=datetime.datetime.now)
 
     tags = db.relationship('Tag', secondary=entry_tags,
-                            backref=db.backref('entries', lazy='dynamic'))
-    
+                           backref=db.backref('entries', lazy='dynamic'))
+
     def __init__(self, *args, **kwargs):
         super(Entry, self).__init__(*args, **kwargs)
         self.generate_slug()
@@ -38,6 +42,16 @@ class Entry(db.Model):
         self.slug = ''
         if self.title:
             self.slug = slugify(self.title)
+
+    def entry_list(template, query, **context):
+        valid_statuses = (Entry.STATUS_PUBLIC, Entry.STATUS_DRAFT)
+        query = query.filter(Entry.status.in_(valid_statuses))
+        if request.args.get('q'):
+            search = request.args['q']
+            query = query.filter(
+                (Entry.body.contains(search)) |
+                (Entry.title.contains(search)))
+        return object_list(template, query, **context)
 
     def __repr__(self):
         return '<Entry: %s>' % self.title
